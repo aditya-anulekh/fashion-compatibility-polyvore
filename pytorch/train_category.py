@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 import argparse
 import time
@@ -20,6 +20,12 @@ def train_model(dataloader, model, criterion, optimizer, device, num_epochs, dat
     since = time.time()
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
+
+    track_loss = {"train":[],
+            "test":[]}
+    
+    track_acc = {"train":[],
+            "test":[]}
 
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
@@ -55,6 +61,9 @@ def train_model(dataloader, model, criterion, optimizer, device, num_epochs, dat
             epoch_loss = running_loss / dataset_size[phase]
             epoch_acc = running_corrects.double() / dataset_size[phase]
 
+            track_loss[phase].append(epoch_loss)
+            track_acc[phase].append(epoch_acc.to("cpu"))
+
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(phase, epoch_loss, epoch_acc))
 
             if phase=='test' and epoch_acc > best_acc:
@@ -68,12 +77,14 @@ def train_model(dataloader, model, criterion, optimizer, device, num_epochs, dat
     print('Time taken to complete training: {:0f}m {:0f}s'.format(time_elapsed // 60, time_elapsed % 60))
     print('Best acc: {:.4f}'.format(best_acc))
 
+    return track_loss, track_acc
+
 
 
 
 if __name__=='__main__':
 
-    dataloaders, classes, dataset_size = get_dataloader(debug=Config['debug'], batch_size=Config['batch_size'], num_workers=Config['num_workers'])
+    dataloaders, classes, dataset_size, le = get_dataloader(debug=Config['debug'], batch_size=Config['batch_size'], num_workers=Config['num_workers'])
     for param in model.parameters():
         param.requires_grad = False
     num_ftrs = model.fc.in_features
@@ -84,4 +95,14 @@ if __name__=='__main__':
     device = torch.device('cuda:0' if torch.cuda.is_available() and Config['use_cuda'] else 'cpu')
     print(device)
 
-    train_model(dataloaders, model, criterion, optimizer, device, num_epochs=Config['num_epochs'], dataset_size=dataset_size)
+    loss, acc = train_model(dataloaders, model, criterion, optimizer, device, num_epochs=Config['num_epochs'], dataset_size=dataset_size)
+
+    fig, ax = plt.subplots(1, 2)
+    fig.axes[0].plot(loss["train"])
+    fig.axes[0].plot(loss["test"])
+
+    fig.axes[1].plot(acc["train"])
+    fig.axes[1].plot(acc["test"])
+
+    plt.show()
+

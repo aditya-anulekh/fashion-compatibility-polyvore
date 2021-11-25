@@ -55,18 +55,20 @@ class PolyvoreImageLoader:
             if id_to_category.get(osp.splitext(image)[0], False):
                 X.append(image)
                 category_id = int(id_to_category[osp.splitext(image)[0]])
-                category = categories[categories["id"]==category_id]["semantic"].values()[0]
+                category = categories[categories["id"]==category_id]["semantic"].values[0]
                 y.append(category)
 
 
         # Encoding y
-        # y = LabelEncoder().fit_transform(y)
+        le = LabelEncoder()
+        le.fit(y)
+        y = le.fit_transform(y)
         print(f"# of images: {len(X)} \n# of categories: {max(y)+1}")
 
         # Split the dataset for training and testing
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
-        return X_train, X_test, y_train, y_test, #max(y)+1
+        return X_train, X_test, y_train, y_test, max(y)+1, le
 
 
 class PolyvoreDataset(Dataset):
@@ -94,12 +96,15 @@ class PolyvoreDataset(Dataset):
 def get_dataloader(debug, batch_size, num_workers):
     dataset = PolyvoreImageLoader()
     transforms = dataset.get_data_transforms()
-    X_train, X_test, y_train, y_test, classes = dataset.create_dataset()
+    X_train, X_test, y_train, y_test, classes, le = dataset.create_dataset()
 
     if debug:
-        train_set = PolyvoreDataset(X_train[:100], y_train[:100], transform=transforms['train'])
-        test_set = PolyvoreDataset(X_test[:100], y_test[:100], transform=transforms['test'])
-        dataset_size = {'train': len(y_train), 'test': len(y_test)}
+        debug_set_size = 200
+        train_set = PolyvoreDataset(X_train[:debug_set_size], y_train[:debug_set_size], transform=transforms['train'])
+        test_set = PolyvoreDataset(X_test[debug_set_size:2*debug_set_size], 
+                                    y_test[debug_set_size:2*debug_set_size], 
+                                    transform=transforms['test'])
+        dataset_size = {'train': debug_set_size, 'test': debug_set_size}
     else:
         train_set = PolyvoreDataset(X_train, y_train, transforms['train'])
         test_set = PolyvoreDataset(X_test, y_test, transforms['test'])
@@ -111,7 +116,7 @@ def get_dataloader(debug, batch_size, num_workers):
                                  batch_size=batch_size,
                                  num_workers=num_workers)
                                  for x in ['train', 'test']}
-    return dataloaders, classes, dataset_size
+    return dataloaders, classes, dataset_size, le
 
 
 if __name__ == "__main__":

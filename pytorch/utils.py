@@ -9,9 +9,9 @@ Config["checkpoint_path"] = ""
 
 
 Config["use_cuda"] = True
-Config["debug"] = True
+Config["debug"] = False
 Config["num_epochs"] = 20
-Config["batch_size"] = 64
+Config["batch_size"] = 128
 Config["channels"] = 3
 
 Config["learning_rate"] = 0.001
