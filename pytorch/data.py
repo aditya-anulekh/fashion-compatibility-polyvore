@@ -8,6 +8,7 @@ from torchvision import transforms, io
 from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
+import pandas as pd
 from utils import Config
 
 
@@ -39,6 +40,9 @@ class PolyvoreImageLoader:
     def create_dataset(self):
         with open(Config["meta_file"], "r") as file:
             meta_json = json.load(file)
+
+        categories = pd.read_csv(Config["category_file_path"], names=["id", "fine", "semantic"])
+
         id_to_category = {}
         for k, v in tqdm(meta_json.items()):
             id_to_category[k] = v["category_id"]
@@ -50,16 +54,19 @@ class PolyvoreImageLoader:
         for image in files:
             if id_to_category.get(osp.splitext(image)[0], False):
                 X.append(image)
-                y.append(int(id_to_category[osp.splitext(image)[0]]))
+                category_id = int(id_to_category[osp.splitext(image)[0]])
+                category = categories[categories["id"]==category_id]["semantic"].values()[0]
+                y.append(category)
+
 
         # Encoding y
-        y = LabelEncoder().fit_transform(y)
+        # y = LabelEncoder().fit_transform(y)
         print(f"# of images: {len(X)} \n# of categories: {max(y)+1}")
 
         # Split the dataset for training and testing
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
-        return X_train, X_test, y_train, y_test, max(y)+1
+        return X_train, X_test, y_train, y_test, #max(y)+1
 
 
 class PolyvoreDataset(Dataset):
@@ -105,6 +112,7 @@ def get_dataloader(debug, batch_size, num_workers):
                                  num_workers=num_workers)
                                  for x in ['train', 'test']}
     return dataloaders, classes, dataset_size
+
 
 if __name__ == "__main__":
     print(Config["debug"])

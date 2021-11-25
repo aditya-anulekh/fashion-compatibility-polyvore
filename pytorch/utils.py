@@ -4,6 +4,7 @@ Config = {}
 Config ={}
 Config["root_path"] = "../polyvore_outfits_hw/polyvore_outfits"
 Config["meta_file"] = osp.join(Config["root_path"], "polyvore_item_metadata.json")
+Config["category_file_path"] = osp.join(Config["root_path"], "categories.csv")
 Config["checkpoint_path"] = ""
 
 
