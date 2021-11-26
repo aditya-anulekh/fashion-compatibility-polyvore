@@ -8,6 +8,7 @@ import time
 import copy
 from tqdm import tqdm
 import os.path as osp
+import pickle as pkl
 
 from utils import Config
 from model import model
@@ -103,6 +104,8 @@ if __name__=='__main__':
 
     fig.axes[1].plot(acc["train"])
     fig.axes[1].plot(acc["test"])
-
-    plt.show()
+    fig.savefig("plots.png", dpi=200)
+    
+    with open("variables.pkl", "w") as file:
+        pkl.dump([le, loss, acc], file)
 
