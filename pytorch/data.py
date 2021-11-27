@@ -5,11 +5,14 @@ from tqdm import tqdm
 
 import torch
 from torchvision import transforms, io
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, dataloader
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 import pandas as pd
 from utils import Config
+from PIL import Image
+import numpy as np
+from model import model
 
 
 class PolyvoreImageLoader:
@@ -51,12 +54,12 @@ class PolyvoreImageLoader:
         X = []
         y = []
 
-        for image in files:
+        for image in tqdm(files):
             if id_to_category.get(osp.splitext(image)[0], False):
                 X.append(image)
                 category_id = int(id_to_category[osp.splitext(image)[0]])
-                category = categories[categories["id"]==category_id]["semantic"].values[0]
-                y.append(category)
+                # category = categories[categories["id"]==category_id]["semantic"].values[0]
+                y.append(category_id)
 
 
         # Encoding y
@@ -119,6 +122,79 @@ def get_dataloader(debug, batch_size, num_workers):
     return dataloaders, classes, dataset_size, le
 
 
+
+# For pairwise classification
+
+class PolyvorePairDataset(Dataset):
+    def __init__(self, compatibility_file, outfits_file, transform, debug=False):
+        # self.item = item
+        # self.compatibility = compatibility
+        # self.compatibility_file = compatibility_file
+        # self.outfits_file = outfits_file
+        self.data = pd.read_csv(compatibility_file, usecols=[0,1,2], names=["compat", "image_1", "image_2"], delim_whitespace=True)
+        if debug:
+            self.data = self.data[len(self.data)//2-100:len(self.data)//2+100]
+        self.items = pd.read_json(outfits_file)
+        self.image_dir = osp.join(Config["root_path"], "images")
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.data)
+        
+    def __getitem__(self, index):
+        images = []
+        y = self.data.iloc[index]["compat"]
+        for col in ["image_1", "image_2"]:
+            set, idx = self.data.iloc[index][col].split("_")
+            set, idx = int(set), int(idx)
+
+            image = [x["item_id"] for x in list(self.items[self.items["set_id"] == set]["items"].iloc[0]) if x["index"] == idx][0]
+            img_name = osp.join(self.image_dir, f"{image}.jpg")
+            images.append(self.transform(io.read_image(img_name).float()))
+
+        return images, y
+
+
+def get_pair_dataloader(debug, batch_size, num_workers):
+    data_transforms = {
+            "train":transforms.Compose([
+                transforms.CenterCrop(224),
+                # transforms.ToTensor(),
+                transforms.Normalize([0.5 for _ in range(Config["channels"])],
+                [0.5 for _ in range(Config["channels"])])
+            ]),
+            "test":transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                # transforms.ToTensor(),
+                transforms.Normalize([0.5 for _ in range(Config["channels"])],
+                [0.5 for _ in range(Config["channels"])])
+            ])
+        }
+    train_dataset = PolyvorePairDataset(Config["compatibility_train"], Config["outfits_train"],
+                                        data_transforms["train"], debug)
+    test_dataset = PolyvorePairDataset(Config["compatibility_valid"], Config["outfits_valid"],
+                                        data_transforms["test"], debug)
+
+    dataset_size = {'train': train_dataset.__len__(), 
+                    'test': test_dataset.__len__()}
+
+    datasets = {'train': train_dataset, 'test': test_dataset}
+
+    dataloaders = {x: DataLoader(datasets[x],
+                                 shuffle=True if x=='train' else False,
+                                 batch_size=batch_size,
+                                 num_workers=num_workers)
+                                 for x in ['train', 'test']}
+    return dataloaders, dataset_size
+
+
 if __name__ == "__main__":
-    print(Config["debug"])
-    print(get_dataloader(Config["debug"], 64, 1))
+    dataloaders, dataset_size = get_pair_dataloader(False, 2, 1)
+    model.fc = torch.nn.Identity()
+    model.to("cuda")
+    for (image1, image2), y in dataloaders["train"]:
+        image1 = image1.to("cuda")
+        image2 = image2.to("cuda")
+        print(image1.size(0))
+        break

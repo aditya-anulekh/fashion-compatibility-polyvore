@@ -11,9 +11,8 @@ import os.path as osp
 import pickle as pkl
 
 from utils import Config
-from model import model
-from data import get_dataloader
-
+from model import DualResNet
+from data import get_pair_dataloader
 
 
 def train_model(dataloader, model, criterion, optimizer, device, num_epochs, dataset_size):
@@ -41,22 +40,25 @@ def train_model(dataloader, model, criterion, optimizer, device, num_epochs, dat
             running_loss = 0.0
             running_corrects = 0
 
-            for inputs, labels in tqdm(dataloader[phase]):
-                inputs = inputs.to(device)
+            for (image1, image2), labels in tqdm(dataloader[phase]):
+                image1 = image1.to(device)
+                image2 = image2.to(device)
                 labels = labels.to(device)
                 optimizer.zero_grad()
 
                 with torch.set_grad_enabled(phase=='train'):
-                    outputs = model(inputs)
-                    _, pred = torch.max(outputs, 1)
-                    loss = criterion(outputs, labels)
+                    outputs = model(image1, image2)
+                    outputs = outputs.reshape(image1.size(0))
+                    pred = torch.Tensor([1 if x>=0.5 else 0 for x in outputs])
+                    pred = pred.to(device)
+                    loss = criterion(outputs, labels.float())
 
                     if phase=='train':
                         loss.backward()
                         optimizer.step()
 
 
-                running_loss += loss.item() * inputs.size(0)
+                running_loss += loss.item() * image1.size(0)
                 running_corrects += torch.sum(pred==labels.data)
 
             epoch_loss = running_loss / dataset_size[phase]
@@ -81,21 +83,14 @@ def train_model(dataloader, model, criterion, optimizer, device, num_epochs, dat
     return track_loss, track_acc
 
 
-
-
 if __name__=='__main__':
 
-    dataloaders, classes, dataset_size, le = get_dataloader(debug=Config['debug'], batch_size=Config['batch_size'], num_workers=Config['num_workers'])
-    for param in model.parameters():
-        param.requires_grad = False
-    num_ftrs = model.fc.in_features
-    model.fc = nn.Sequential(
-                    nn.Linear(num_ftrs, 512),
-                    nn.ReLU(),
-                    nn.Linear(512, classes)
-                )
+    dataloaders, dataset_size = get_pair_dataloader(debug=Config['debug'], batch_size=Config['batch_size'], num_workers=Config['num_workers'])
+    model = DualResNet()
+    model.model1.requires_grad = False
+    # model.model2.requires_grad = False
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.BCELoss()
     optimizer = optim.RMSprop(model.parameters(), lr=Config['learning_rate'])
     device = torch.device('cuda:0' if torch.cuda.is_available() and Config['use_cuda'] else 'cpu')
     print(device)
@@ -110,6 +105,5 @@ if __name__=='__main__':
     fig.axes[1].plot(acc["test"])
     fig.savefig("plots.png", dpi=200)
     
-    with open("variables.pkl", "wb") as file:
-        pkl.dump([le, loss, acc], file)
-
+    # with open("variables.pkl", "wb") as file:
+    #     pkl.dump([le, loss, acc], file)
