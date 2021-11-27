@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -48,10 +49,10 @@ def train_model(dataloader, model, criterion, optimizer, device, num_epochs, dat
 
                 with torch.set_grad_enabled(phase=='train'):
                     outputs = model(image1, image2)
-                    outputs = outputs.reshape(image1.size(0))
-                    pred = torch.Tensor([1 if x>=0.5 else 0 for x in outputs])
+                    # outputs = outputs.reshape(image1.size(0))
+                    _, pred = torch.max(outputs, 1)
                     pred = pred.to(device)
-                    loss = criterion(outputs, labels.float())
+                    loss = criterion(outputs, labels)
 
                     if phase=='train':
                         loss.backward()
@@ -73,8 +74,8 @@ def train_model(dataloader, model, criterion, optimizer, device, num_epochs, dat
                 best_acc = epoch_acc
                 best_model_wts = copy.deepcopy(model.state_dict())
 
-        torch.save(best_model_wts, osp.join(Config['root_path'], Config['checkpoint_path'], 'model.pth'))
-        print('Model saved at: {}'.format(osp.join(Config['root_path'], Config['checkpoint_path'], 'model.pth')))
+        torch.save(best_model_wts, osp.join("checkpoints", f'model_{epoch}.pth'))
+        print('Model saved at: {}'.format(osp.join("checkpoints", f'model_{epoch}.pth')))
 
     time_elapsed = time.time() - since
     print('Time taken to complete training: {:0f}m {:0f}s'.format(time_elapsed // 60, time_elapsed % 60))
@@ -90,20 +91,28 @@ if __name__=='__main__':
     model.model1.requires_grad = False
     # model.model2.requires_grad = False
 
-    criterion = nn.BCELoss()
-    optimizer = optim.RMSprop(model.parameters(), lr=Config['learning_rate'])
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=Config['learning_rate'])
     device = torch.device('cuda:0' if torch.cuda.is_available() and Config['use_cuda'] else 'cpu')
     print(device)
+    print(os.getcwd())
+    if not osp.exists(f"checkpoints"):
+        os.mkdir(f"checkpoints")
 
     loss, acc = train_model(dataloaders, model, criterion, optimizer, device, num_epochs=Config['num_epochs'], dataset_size=dataset_size)
 
     fig, ax = plt.subplots(1, 2)
-    fig.axes[0].plot(loss["train"])
-    fig.axes[0].plot(loss["test"])
+    fig.axes[0].plot(loss["train"], label="train")
+    fig.axes[0].plot(loss["test"], label="validation")
+    fig.axes[0].set_title("Training and Validation Loss")
+    fig.axes[0].legend()
 
-    fig.axes[1].plot(acc["train"])
-    fig.axes[1].plot(acc["test"])
+    fig.axes[1].plot(acc["train"], label="train")
+    fig.axes[1].plot(acc["test"], label="validation")
+    fig.axes[1].set_title("Training and Validation Accuracy")
+    fig.axes[1].legend()
+
     fig.savefig("plots.png", dpi=200)
     
-    # with open("variables.pkl", "wb") as file:
-    #     pkl.dump([le, loss, acc], file)
+    with open("variables.pkl", "wb") as file:
+        pkl.dump([loss, acc], file)

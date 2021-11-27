@@ -127,13 +127,9 @@ def get_dataloader(debug, batch_size, num_workers):
 
 class PolyvorePairDataset(Dataset):
     def __init__(self, compatibility_file, outfits_file, transform, debug=False):
-        # self.item = item
-        # self.compatibility = compatibility
-        # self.compatibility_file = compatibility_file
-        # self.outfits_file = outfits_file
         self.data = pd.read_csv(compatibility_file, usecols=[0,1,2], names=["compat", "image_1", "image_2"], delim_whitespace=True)
         if debug:
-            self.data = self.data[len(self.data)//2-100:len(self.data)//2+100]
+            self.data = self.data[len(self.data)//2-4:len(self.data)//2+4]
         self.items = pd.read_json(outfits_file)
         self.image_dir = osp.join(Config["root_path"], "images")
         self.transform = transform
@@ -190,7 +186,7 @@ def get_pair_dataloader(debug, batch_size, num_workers):
 
 
 if __name__ == "__main__":
-    dataloaders, dataset_size = get_pair_dataloader(False, 2, 1)
+    dataloaders, dataset_size = get_pair_dataloader(False, 64, 1)
     model.fc = torch.nn.Identity()
     model.to("cuda")
     for (image1, image2), y in dataloaders["train"]:
