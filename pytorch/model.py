@@ -1,24 +1,26 @@
 import torch.nn as nn
 import torch
-from torchvision.models import resnet50
+from torchvision.models import resnet50, resnet34
 
 
 
-model = resnet50(pretrained=True)
+model = resnet34(pretrained=True)
 
 class DualResNet(nn.Module):
     def __init__(self):
         super(DualResNet, self).__init__()
-        self.model1 = resnet50(pretrained=True)
+        self.model1 = resnet34(pretrained=True)
         self.model1.fc = nn.Identity()
         # self.model2.fc = nn.Identity()
         self.fc = nn.Sequential(
-                    nn.Linear(4096,1024),
-                    nn.ReLU(),
                     nn.Linear(1024,512),
+                    nn.ReLU(),
+                    nn.Linear(512,256),
                     nn.Dropout(0.3),
                     nn.ReLU(),
-                    nn.Linear(512,2),
+                    nn.Linear(256,128),
+                    nn.ReLU(),
+                    nn.Linear(128,2),
                     # nn.Sigmoid()
         )
     

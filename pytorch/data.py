@@ -1,6 +1,7 @@
 import os
 import os.path as osp
 import json
+import pickle as pkl
 from tqdm import tqdm
 
 import torch
@@ -126,26 +127,23 @@ def get_dataloader(debug, batch_size, num_workers):
 # For pairwise classification
 
 class PolyvorePairDataset(Dataset):
-    def __init__(self, compatibility_file, outfits_file, transform, debug=False):
-        self.data = pd.read_csv(compatibility_file, usecols=[0,1,2], names=["compat", "image_1", "image_2"], delim_whitespace=True)
+    def __init__(self, X, y, transform, debug=False):
+        self.X = X
+        self.y = y
         if debug:
-            self.data = self.data[len(self.data)//2-4:len(self.data)//2+4]
-        self.items = pd.read_json(outfits_file)
+            debug_length = 100
+            self.X = self.X[len(self.X)//2-debug_length:len(self.X)//2+debug_length]
         self.image_dir = osp.join(Config["root_path"], "images")
         self.transform = transform
 
     def __len__(self):
-        return len(self.data)
+        return len(self.X)
         
     def __getitem__(self, index):
         images = []
-        y = self.data.iloc[index]["compat"]
-        for col in ["image_1", "image_2"]:
-            set, idx = self.data.iloc[index][col].split("_")
-            set, idx = int(set), int(idx)
-
-            image = [x["item_id"] for x in list(self.items[self.items["set_id"] == set]["items"].iloc[0]) if x["index"] == idx][0]
-            img_name = osp.join(self.image_dir, f"{image}.jpg")
+        y = self.y[index]
+        for image in self.X[index]:
+            img_name = osp.join(self.image_dir, image)
             images.append(self.transform(io.read_image(img_name).float()))
 
         return images, y
@@ -167,9 +165,24 @@ def get_pair_dataloader(debug, batch_size, num_workers):
                 [0.5 for _ in range(Config["channels"])])
             ])
         }
-    train_dataset = PolyvorePairDataset(Config["compatibility_train"], Config["outfits_train"],
+
+    # Load train and valid files
+    with open("train_files/X_train.pkl", "rb") as file:
+        X_train = pkl.load(file)
+
+    with open("train_files/y_train.pkl", "rb") as file:
+        y_train = pkl.load(file)
+
+    with open("train_files/X_valid.pkl", "rb") as file:
+        X_valid = pkl.load(file)
+
+    with open("train_files/y_valid.pkl", "rb") as file:
+        y_valid = pkl.load(file)
+
+
+    train_dataset = PolyvorePairDataset(X_train, y_train,
                                         data_transforms["train"], debug)
-    test_dataset = PolyvorePairDataset(Config["compatibility_valid"], Config["outfits_valid"],
+    test_dataset = PolyvorePairDataset(X_valid, y_valid,
                                         data_transforms["test"], debug)
 
     dataset_size = {'train': train_dataset.__len__(), 
@@ -188,9 +201,9 @@ def get_pair_dataloader(debug, batch_size, num_workers):
 if __name__ == "__main__":
     dataloaders, dataset_size = get_pair_dataloader(False, 64, 1)
     model.fc = torch.nn.Identity()
-    model.to("cuda")
+    # model.to("cuda")
     for (image1, image2), y in dataloaders["train"]:
-        image1 = image1.to("cuda")
-        image2 = image2.to("cuda")
+        image1 = image1
+        image2 = image2
         print(image1.size(0))
         break

@@ -1,4 +1,6 @@
+from typing import ForwardRef
 import torch
+from torch._C import device
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 
@@ -66,22 +68,50 @@ class VGGNet(nn.Module):
         return nn.Sequential(*layers)
 
 
+class DualVggNet(nn.Module):
+    def __init__(self):
+        super(DualVggNet, self).__init__()
+        vgg_19 = [(2, 64), (2, 128), (4, 256), (4, 512), (4, 512)]
+        self.model1 = VGGNet(vgg_19, 10)
+        self.model1.fc = nn.Identity()
+        self.fc = nn.Sequential(
+                    nn.Linear(7*7*512,512),
+                    nn.ReLU(),
+                    nn.Linear(512,256),
+                    nn.Dropout(0.3),
+                    nn.ReLU(),
+                    nn.Linear(256,64),
+                    nn.ReLU(),
+                    nn.Linear(64,2),
+                    # nn.Sigmoid()
+        )
+
+    def forward(self, x, y):
+        x = self.model1(x)
+        y = self.model1(y)
+        output = self.fc(torch.cat([x,y], 1))
+        return output
+        
+
+
+
+
 
 if __name__ == "__main__":
-    # net = ConvBlock(64, 2)
-    # print(net)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    vgg_19 = [(2, 64), (2, 128), (4, 256), (4, 512), (4, 512)]
-    net = VGGNet(vgg_19, 10)
-    print(net)
-    # x = torch.rand((1, 3, 224, 224))
-    # y = net(x)
+    print(device)
+    model_d = DualVggNet()
+    model_d.to("cuda")
+    x = torch.rand((2,3,224,224), device="cuda")
+    y = torch.rand((2,3,224,224), device="cuda")
+
+
 
     log_tensorboard = True
 
     if log_tensorboard:
         writer = SummaryWriter('logs/vgg')
 
-        writer.add_graph(net.to(device=device), torch.rand(1, 3, 224, 224, device=device))
+        writer.add_graph(model_d.to(device=device), torch.rand(1, 3, 224, 224, device=device))
         writer.close()
         
