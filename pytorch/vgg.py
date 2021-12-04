@@ -3,6 +3,7 @@ import torch
 from torch._C import device
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
+from torchvision.models import vgg16
 
 
 class ConvBlock(nn.Module):
@@ -40,6 +41,7 @@ class VGGNet(nn.Module):
         super(VGGNet, self).__init__()
         self.architecture = architecture
         self.model = self._make_layers()
+        self.avg = nn.AdaptiveAvgPool2d((2,2))
 
         self.fc = nn.Sequential(
             nn.Linear(7*7*512, 4096),
@@ -51,6 +53,7 @@ class VGGNet(nn.Module):
 
     def forward(self, x):
         x = self.model(x)
+        x = self.avg(x)
         x = x.reshape(x.shape[0], -1)
         x = self.fc(x)
         return x
@@ -71,20 +74,20 @@ class VGGNet(nn.Module):
 class DualVggNet(nn.Module):
     def __init__(self):
         super(DualVggNet, self).__init__()
-        vgg_19 = [(2, 64), (2, 128), (4, 256), (4, 512), (4, 512)]
-        self.model1 = VGGNet(vgg_19, 10)
+        vgg_19 = [(2, 64), (2, 128), (3, 256), (3, 256), (3, 256)]
+        self.model1 = vgg16(pretrained=False)
         self.model1.fc = nn.Identity()
         self.fc = nn.Sequential(
-                    nn.Linear(7*7*512,512),
-                    nn.ReLU(),
-                    nn.Linear(512,256),
-                    nn.Dropout(0.3),
-                    nn.ReLU(),
-                    nn.Linear(256,64),
-                    nn.ReLU(),
-                    nn.Linear(64,2),
-                    # nn.Sigmoid()
-        )
+                            nn.Linear(2000,256),
+                            nn.ReLU(),
+                            # nn.Linear(512,256),
+                            # nn.Dropout(0.3),
+                            # nn.ReLU(),
+                            nn.Linear(256,64),
+                            nn.ReLU(),
+                            nn.Linear(64,2),
+                            # nn.Sigmoid()
+                            )
 
     def forward(self, x, y):
         x = self.model1(x)
